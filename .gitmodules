@@ -6,3 +6,7 @@
 	path = rl-utils
 	url = https://github.com/iamlab-cmu/rl-utils.git
 	branch = master
+[submodule "procgen-curriculum"]
+	path = procgen-curriculum
+	url = https://github.com/montrealrobotics/procgen-curriculum.git
+	branch = master
