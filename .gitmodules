@@ -2,3 +2,7 @@
 	path = baselines-curate
 	url = https://github.com/montrealrobotics/baselines-curate.git
 	branch = master
+[submodule "rl-utils"]
+	path = rl-utils
+	url = https://github.com/iamlab-cmu/rl-utils.git
+	branch = master
