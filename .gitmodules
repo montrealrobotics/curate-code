@@ -1,0 +1,4 @@
+[submodule "baselines-curate"]
+	path = baselines-curate
+	url = https://github.com/montrealrobotics/baselines-curate.git
+	branch = master
