@@ -1,2 +1,3 @@
+from .env_param_config import env_param_config_from_name
 from .param_distrib import load_param_distrib
 from .param_distrib import ConstantParamDistrib
