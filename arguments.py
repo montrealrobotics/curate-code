@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
+import json
 
 import torch
 
@@ -97,10 +98,30 @@ parser.add_argument(
     default=1, 
     help='Experiment random seed.')
 parser.add_argument(
+    '--offset_seed',
+    type=str2bool, nargs='?', const=True, default=False,
+    help='Whether to offset the venv seeds by the random seed.')
+parser.add_argument(
+    '--seed_variable',
+    type=str,
+    help='Specifies the environment variable that contains the value of the random seed.',
+)
+parser.add_argument(
+    '--seed_variable_offset',
+    type=int,
+    help='Specifies the offset to add to the environment variable to calculate the value of the random seed.',
+)
+parser.add_argument(
     '--num_processes',
     type=int,
     default=32,
     help='How many training CPU processes to use for experience collection.')
+parser.add_argument(
+    '--env_vectorization',
+    type=str,
+    default='dcd',
+    choices=['dcd', 'env'],
+    help='Whether the DCD framework or the environment should use environment vectorization.')
 parser.add_argument(
     '--num_steps',
     type=int,
@@ -181,7 +202,7 @@ parser.add_argument(
     default='paired',
     choices=['domain_randomization', 'minimax', 
              'paired', 'flexible_paired', 
-             'alp_gmm'],
+             'alp_gmm', 'parameter_distribution'],
     help='UED algorithm')
 parser.add_argument(
     '--protagonist_plr',
@@ -198,6 +219,16 @@ parser.add_argument(
          Domain randomization (DR) resets using reset random. 
          If False, DR resets using a uniformly random adversary policy.
          Defaults to False for legacy reasons.''')
+parser.add_argument(
+    '--param_distrib_strategy',
+    type=str,
+    help='The strategy to change the environment parameter distribution.',
+)
+parser.add_argument(
+    '--param_distrib_config',
+    type=json.loads,
+    help='The configuration to specify for the parameter distribution.',
+)
 
 
 # PLR arguments.
@@ -370,12 +401,20 @@ parser.add_argument(
     '--no_cuda',
     type=str2bool, nargs='?', const=True, default=False,
     help='Disables CUDA training.')
+parser.add_argument(
+    '--assert_cuda',
+    type=str2bool, nargs='?', const=True, default=False,
+    help='Asserts CUDA training.')
 
 # Logging arguments.
 parser.add_argument(
     '--xpid',
     default='latest',
     help='Name for the training run. Used for the name of the output results directory.')
+parser.add_argument(
+    '--append_seed_to_xpid',
+    type=str2bool, nargs='?', const=True, default=False,
+    help='Append the random seed to the xpid.')
 parser.add_argument(
     '--log_dir',
     default='~/logs/dcd/',
@@ -403,6 +442,18 @@ parser.add_argument(
     help=f'''Archive interval basis. 
              num_updates: By # update cycles (full rollout cycle across all agents); 
              student_grad_updates: By # grad updates performed by the student agent.''')
+parser.add_argument(
+    '--test_checkpoint',
+    type=str2bool, nargs='?', const=True, default=False,
+    help='Whether to save the best model with the highest test return.')
+parser.add_argument(
+    '--test_solved_checkpoint',
+    type=str2bool, nargs='?', const=True, default=False,
+    help='Whether to save the model that solves the test environment.')
+parser.add_argument(
+    '--test_aggregation',
+    type=str2bool, nargs='?', const=True, default=False,
+    help='Whether to consider the aggregation of all test environments to be a test environment.')
 parser.add_argument(
     "--weight_log_interval", 
     type=int, 
@@ -450,6 +501,10 @@ parser.add_argument(
     "--verbose", 
     type=str2bool, nargs='?', const=True, default=False,
     help="Whether to print logs to stdout.")
+parser.add_argument(
+    "--assert_no_prior_xpid",
+    type=str2bool, nargs='?', const=True, default=False,
+    help="Asserts no prior xpid exists in the provided log_dir.")
 
 # Evaluation arguments.
 parser.add_argument(
@@ -472,6 +527,32 @@ parser.add_argument(
     type=str,
     default='MultiGrid-SixteenRooms-v0,MultiGrid-Labyrinth-v0,MultiGrid-Maze-v0',
     help='CSV string of test environments for evaluation during training.')
+parser.add_argument(
+    '--early_stopping',
+    type=str2bool, nargs='?', const=True, default=False,
+    help='Whether training should stop based on the returns in the test environments.')
+parser.add_argument(
+    '--test_solved_return_threshold',
+    type=float,
+    default=0.5,
+    help='Mean return threshold to indicate the test environment has been solved.')
+parser.add_argument(
+    '--deterministic_test_evaluation',
+    type=str2bool, nargs='?', const=True, default=False,
+    help='Whether test evaluation should be stochastic or deterministic.')
+parser.add_argument(
+    '--test_seed',
+    type=int,
+    default=None,
+    help='Random seed for evaluation.')
+parser.add_argument(
+    '--test_stagger_seeds',
+    type=str2bool, nargs='?', const=True, default=False,
+    help='Whether evaulation random seeds should be staggered.')
+parser.add_argument(
+    '--test_offset_seed',
+    type=str2bool, nargs='?', const=True, default=False,
+    help='Whether to offset the test seed by the random seed.')
 
 # Environment arguments.
 parser.add_argument(
@@ -553,3 +634,13 @@ parser.add_argument(
     '--num_goal_bins',
     type=int, default=1,
     help="Number of goal bins when using sparse rewards for CarRacing.")
+
+# Procgen-specific arguments
+parser.add_argument(
+    '--procgen_resource_root',
+    type=str,
+    help="Path to Procgen resources.")
+parser.add_argument(
+    '--procgen_prebuilt_root',
+    type=str,
+    help="Path to a prebuilt version of Procgen.")
