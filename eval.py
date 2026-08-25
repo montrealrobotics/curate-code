@@ -23,14 +23,19 @@ import os
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
+from gym import error as gym_error
+
 from envs.registration import make as gym_make
+from envs.registration import make_vec_linked as gym_make_vec_linked
+from envs.registration import spec as gym_spec
 from envs.multigrid.maze import *
 from envs.multigrid.crossing import *
 from envs.multigrid.fourrooms import *
 from envs.multigrid.mst_maze import *
 from envs.box2d import *
 from envs.bipedalwalker import *
-from envs.wrappers import VecMonitor, VecPreprocessImageWrapper, ParallelAdversarialVecEnv, \
+from envs.minigrid import *
+from envs.wrappers import VecMonitor, VecPreprocessImageWrapper, ParallelAdversarialVecEnv, ParallelAdversarialLinkedVecEnv, \
 	MultiGridFullyObsWrapper, VecFrameStack, CarRacingWrapper
 from util import DotDict, str2bool, make_agent, create_parallel_env, is_discrete_actions
 from arguments import parser
@@ -92,13 +97,18 @@ def parse_args():
 	parser.add_argument(
 		'--seed', 
 		type=int, 
-		default=1, 
+		default=None,
 		help='Random seed.')
 	parser.add_argument(
 		'--max_seeds', 
 		type=int, 
 		default=None, 
 		help='Maximum number of matched experiment IDs to evaluate.')
+	parser.add_argument(
+		'--stagger_seeds',
+		type=str2bool, nargs='?', const=True, default=False,
+		help='Stagger the random seeds of each process.'
+	)
 	parser.add_argument(
 		'--num_processes',
 		type=int,
@@ -165,15 +175,34 @@ class Evaluator(object):
 	def get_stats_keys(self):
 		keys = []
 		for env_name in self.env_names:
-			keys += [f'solved_rate:{env_name}', f'test_returns:{env_name}']
+			keys += [f'solved_rate:{env_name}', f'test_returns:{env_name}', f'test_returns_std:{env_name}']
 		return keys
 
 	@staticmethod
-	def make_env(env_name, record_video=False, **kwargs):
+	def make_env(env_name, record_video=False, seed=None, **kwargs):
+		seed_kwarg = {'seed': seed} if seed is not None else {}
 		if env_name in ['BipedalWalker-v3', 'BipedalWalkerHardcore-v3']:
-			env = gym.make(env_name)
+			env = gym.make(env_name, **seed_kwarg)
+		elif env_name.startswith('Procgen'):
+			env_kwargs = {}
+			env_kwargs.update(seed_kwarg)
+			env_kwargs['resource_root'] = kwargs.get('resource_root')
+			env_kwargs['prebuilt_root'] = kwargs.get('prebuilt_root')
+
+			if 'num_procs' in kwargs:
+				num_procs = kwargs['num_procs']
+				env_kwargs['num_procs'] = num_procs
+				env = gym_make_vec_linked(env_name, num_procs, **env_kwargs)
+			else:
+				env = gym_make(env_name, **env_kwargs)
 		else:
-			env = gym_make(env_name)
+			if 'env_params' in kwargs:
+				env_kwargs = {}
+				env_kwargs.update(seed_kwarg)
+				env_kwargs['env_params'] = kwargs.get('env_params')
+				env = gym_make(env_name, **env_kwargs)
+			else:
+				env = gym_make(env_name, **seed_kwarg)
 
 		is_multigrid = env_name.startswith('MultiGrid')
 		is_car_racing = env_name.startswith('CarRacing')
@@ -193,10 +222,10 @@ class Evaluator(object):
 				crop=crop,
 				eval_=True)
 
-			if record_video:
-				from gym.wrappers.monitor import Monitor
-				env = Monitor(env, "videos/", force=True)
-				print('Recording video!', flush=True)
+		if record_video:
+			from gym.wrappers.monitor import Monitor
+			env = Monitor(env, "videos/", force=True)
+			print('Recording video!', flush=True)
 
 		if is_multigrid and kwargs.get('use_global_policy'):
 			env = MultiGridFullyObsWrapper(env, is_adversarial=False)
@@ -208,12 +237,17 @@ class Evaluator(object):
 		is_multigrid = env_name.startswith('MultiGrid') or env_name.startswith('MiniGrid')
 		is_car_racing = env_name.startswith('CarRacing')
 		is_bipedal = env_name.startswith('BipedalWalker')
+		is_procgen = env_name.startswith('Procgen')
 
 		obs_key = None
 		scale = None
 		if is_multigrid:
 			obs_key = 'image'
 			scale = 10.0
+
+		if is_procgen:
+			obs_key = 'image'
+			scale = 255.0
 
 		# Channels first
 		transpose_order = [2,0,1]
@@ -228,7 +262,7 @@ class Evaluator(object):
 
 		return venv
 
-	def _init_parallel_envs(self, env_names, num_processes, device=None, record_video=False, **kwargs):
+	def _init_parallel_envs(self, env_names, num_processes, device=None, record_video=False, seed=None, stagger_seeds=False, env_vectorization='dcd', **kwargs):
 		self.env_names = env_names
 		self.num_processes = num_processes
 		self.device = device
@@ -236,8 +270,38 @@ class Evaluator(object):
 
 		make_fn = []
 		for env_name in env_names:
-			make_fn = [lambda: Evaluator.make_env(env_name, record_video, **kwargs)]*self.num_processes
-			venv = ParallelAdversarialVecEnv(make_fn, adversary=False, is_eval=True)
+			parallel_adv_env_obj = None
+			if seed is None:
+				if env_vectorization == 'env':
+					raise NotImplementedError
+				parallel_adv_env_obj = ParallelAdversarialVecEnv
+				# backwards compatibility - use default seeds determined by environment
+				make_fn = [lambda: Evaluator.make_env(env_name, record_video, **kwargs)]*self.num_processes
+			else:
+				if env_vectorization == 'dcd':
+					parallel_adv_env_obj = ParallelAdversarialVecEnv
+					if stagger_seeds:
+						make_fn = [
+							lambda s=(seed + idx_proc): Evaluator.make_env(env_name, record_video, seed=s, **kwargs)
+							for idx_proc in range(self.num_processes)
+						]
+					else:
+						make_fn = [lambda: Evaluator.make_env(env_name, record_video, seed=seed, **kwargs)]*self.num_processes
+				elif env_vectorization == 'env':
+					parallel_adv_env_obj = ParallelAdversarialLinkedVecEnv
+					if stagger_seeds:
+						print('Warning: stagger_seeds is True, but this method is not yet implemented in env vectorization.')
+					make_fn = lambda: Evaluator.make_env(env_name, record_video, seed=seed, **kwargs)
+				else:
+					raise NotImplementedError
+			if 'StarPilot' in env_name:
+				try:
+					env_spec = gym_spec(env_name)
+				except gym_error.UnregisteredEnv:
+					# Create env on an as-needed basis
+					register_starpilot_env_by_name(env_name)
+					env_spec = gym_spec(env_name)
+			venv = parallel_adv_env_obj(make_fn, adversary=False, is_eval=True)
 			venv = Evaluator.wrap_venv(venv, env_name, device=device)
 			self.venv[env_name] = venv
 
@@ -252,16 +316,20 @@ class Evaluator(object):
 		deterministic=False, 
 		show_progress=False,
 		render=False,
-		accumulator='mean'):
+		accumulator='mean',
+		return_test_records=False,
+		):
 
 		# Evaluate agent for N episodes
 		venv = self.venv
 		env_returns = {}
 		env_solved_episodes = {}
+		env_episode_lengths = {}
 		
 		for env_name, venv in self.venv.items():
 			returns = []
 			solved_episodes = 0
+			episode_lengths = []
 
 			obs = venv.reset()
 			recurrent_hidden_states = torch.zeros(
@@ -294,6 +362,7 @@ class Evaluator(object):
 				for i, info in enumerate(infos):
 					if 'episode' in info.keys():
 						returns.append(info['episode']['r'])
+						episode_lengths.append(info['episode']['l'])
 						if returns[-1] > self.solved_threshold:
 							solved_episodes += 1
 						if pbar:
@@ -315,6 +384,7 @@ class Evaluator(object):
 	
 			env_returns[env_name] = returns
 			env_solved_episodes[env_name] = solved_episodes
+			env_episode_lengths[env_name] = episode_lengths
 
 		stats = {}
 		for env_name in self.env_names:
@@ -325,6 +395,24 @@ class Evaluator(object):
 				stats[f"test_returns:{env_name}"] = np.mean(env_returns[env_name])
 			else:
 				stats[f"test_returns:{env_name}"] = env_returns[env_name]
+
+			if accumulator == 'mean':
+				stats[f"test_returns_std:{env_name}"] = np.std(env_returns[env_name])
+			
+			if accumulator == 'mean':
+				stats[f"test_episode_length:{env_name}"] = np.mean(env_episode_lengths[env_name])
+			else:
+				stats[f"test_episode_length:{env_name}"] = env_episode_lengths[env_name]
+			
+			if accumulator == 'mean':
+				stats[f"test_episode_length_std:{env_name}"] = np.std(env_episode_lengths[env_name])
+
+			if return_test_records:
+				stats[f"test_records:{env_name}"] = {
+					"episode_lengths": env_episode_lengths[env_name],
+					"returns": env_returns[env_name],
+					"solved_episodes": env_solved_episodes[env_name],
+				}
 
 		return stats
 
@@ -372,12 +460,12 @@ if __name__ == '__main__':
 	os.environ["OMP_NUM_THREADS"] = "1"
 
 	display = None
-	if sys.platform.startswith('linux'):
-		print('Setting up virtual display')
+	# if sys.platform.startswith('linux'):
+	# 	print('Setting up virtual display')
 
-		import pyvirtualdisplay
-		display = pyvirtualdisplay.Display(visible=0, size=(1400, 900), color_depth=24)
-		display.start()
+	# 	import pyvirtualdisplay
+	# 	display = pyvirtualdisplay.Display(visible=0, size=(1400, 900), color_depth=24)
+	# 	display.start()
 
 	args = DotDict(vars(parse_args()))
 	args.num_processes = min(args.num_processes, args.num_episodes)
@@ -487,7 +575,9 @@ if __name__ == '__main__':
 					frame_stack=xpid_flags.frame_stack,
 					grayscale=xpid_flags.grayscale,
 					use_global_critic=xpid_flags.use_global_critic,
-					record_video=args.record_video)
+					record_video=args.record_video,
+					seed=args.seed,
+					stagger_seeds=args.stagger_seeds)
 
 				stats = evaluator.evaluate(agent, 
 					deterministic=args.deterministic, 
