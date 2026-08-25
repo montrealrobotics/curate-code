@@ -18,6 +18,10 @@ import warnings
 
 from gym import error, logger
 
+# new -------------------------------------------
+from .wrappers.linked_env import LinkedEnv
+# -----------------------------------------------
+
 # This format is true today, but it's *not* an official spec.
 # [username/](env-name)-v(version)    env-name is group 1, version is group 2
 #
@@ -124,6 +128,18 @@ class EnvRegistry(object):
             env = TimeLimit(env, max_episode_steps=env.spec.max_episode_steps)
         return env
 
+    def make_vec_linked(self, path, num_envs, **kwargs):
+
+        # Make base env first
+        env = self.make(path, **kwargs)
+
+        # Create linked vec env
+        envs = [
+            LinkedEnv(env, i) for i in range(num_envs)
+        ]
+
+        return envs
+
     def all(self):
         return self.env_specs.values()
 
@@ -168,6 +184,9 @@ def register(id, **kwargs):
 
 def make(id, **kwargs):
     return registry.make(id, **kwargs)
+
+def make_vec_linked(id, num_envs, **kwargs):
+    return registry.make_vec_linked(id, num_envs, **kwargs)
 
 def spec(id):
     return registry.spec(id)
