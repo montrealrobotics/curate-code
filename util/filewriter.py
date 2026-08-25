@@ -70,6 +70,7 @@ class FileWriter:
         rootdir: str = "~/logs",
         symlink_to_latest: bool = True,
         seeds=None,
+        assert_no_prior_xpid=False,
     ):
         if not xpid:
             # Make unique id.
@@ -110,6 +111,9 @@ class FileWriter:
         rootdir = os.path.expandvars(os.path.expanduser(rootdir))
         # To file handler.
         self.basepath = os.path.join(rootdir, self.xpid)
+        if assert_no_prior_xpid:
+            assert not os.path.exists(self.basepath), \
+                f"Expected xpid log directory ({self.basepath}) to not exist, but it does."
         if not os.path.exists(self.basepath):
             self._logger.info("Creating log directory: %s", self.basepath)
             os.makedirs(self.basepath, exist_ok=True)
