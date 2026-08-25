@@ -171,6 +171,14 @@ def model_for_env_agent(
             agent_type=agent_type,
             recurrent_arch=recurrent_arch,
             use_lstm=use_lstm)
+    elif env_name.startswith('MiniGrid'):
+        model = model_for_multigrid_agent(
+            env=env,
+            agent_type=agent_type,
+            recurrent_arch=recurrent_arch,
+            recurrent_hidden_size=recurrent_hidden_size,
+            use_global_critic=use_global_critic,
+            use_global_policy=use_global_policy)
     else:
         raise ValueError(f'Unsupported environment {env_name}.')
 
