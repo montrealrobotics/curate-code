@@ -16,9 +16,10 @@ import torch
 from torchvision import utils as vutils
 
 from envs.registration import make as gym_make
+from envs.registration import make_vec_linked as gym_make_vec_linked
 from .make_agent import make_agent
 from .filewriter import FileWriter
-from envs.wrappers import ParallelAdversarialVecEnv, VecMonitor, VecNormalize, \
+from envs.wrappers import ParallelAdversarialVecEnv, ParallelAdversarialLinkedVecEnv, VecMonitor, VecNormalize, \
     VecPreprocessImageWrapper, VecFrameStack, MultiGridFullyObsWrapper, CarRacingWrapper, TimeLimit
 
 
@@ -134,9 +135,9 @@ def set_obs_at_index(obs, obs_, i):
 
 def is_discrete_actions(env, adversary=False):
     if adversary:
-        return env.adversary_action_space.__class__.__name__ == 'Discrete'
+        return env.adversary_action_space.__class__.__name__ in ['Discrete', 'MultiDiscrete']
     else:
-        return env.action_space.__class__.__name__ == 'Discrete'
+        return env.action_space.__class__.__name__ in ['Discrete', 'MultiDiscrete']
 
 
 def _make_env(args):
@@ -154,6 +155,11 @@ def _make_env(args):
             'clip_reward': args.clip_reward,
             'sparse_rewards': args.sparse_rewards,
             'num_goal_bins': args.num_goal_bins,
+        })
+    if args.env_name.startswith('Procgen'):
+        env_kwargs.update({
+            'resource_root': args.procgen_resource_root,
+            'prebuilt_root': args.procgen_prebuilt_root,
         })
 
     if args.env_name.startswith('CarRacing'):
@@ -177,6 +183,16 @@ def _make_env(args):
             env = TimeLimit(MultiGridFullyObsWrapper(env),
                 max_episode_steps=max_episode_steps)
         return env
+    elif args.env_name.startswith('MiniGrid'):
+        env = gym_make(args.env_name, **env_kwargs)
+        if args.use_global_critic or args.use_global_policy:
+            raise NotImplementedError
+        return env
+    elif args.env_vectorization == 'env':
+        env_kwargs.update({
+            'num_procs': args.num_processes,
+        })
+        return gym_make_vec_linked(args.env_name, args.num_processes, **env_kwargs)
     else:
         return gym_make(args.env_name, **env_kwargs)
 
@@ -185,17 +201,26 @@ def create_parallel_env(args, adversary=True):
     is_multigrid = args.env_name.startswith('MultiGrid')
     is_car_racing = args.env_name.startswith('CarRacing')
     is_bipedalwalker = args.env_name.startswith('BipedalWalker')
+    is_minigrid = args.env_name.startswith('MiniGrid')
+    is_procgen = args.env_name.startswith('Procgen')
 
     make_fn = lambda: _make_env(args)
 
-    venv = ParallelAdversarialVecEnv([make_fn]*args.num_processes, adversary=adversary)
+    venv = None
+    if args.env_vectorization == 'dcd':
+        venv = ParallelAdversarialVecEnv([make_fn]*args.num_processes, adversary=adversary)
+    elif args.env_vectorization == 'env':
+        venv = ParallelAdversarialLinkedVecEnv(make_fn, adversary=adversary)
+    else:
+        raise NotImplementedError
+
     venv = VecMonitor(venv=venv, filename=None, keep_buf=100)
-    venv = VecNormalize(venv=venv, ob=False, ret=args.normalize_returns)
+    venv = VecNormalize(venv=venv, ob=False, ret=args.normalize_returns, gamma=args.gamma)
 
     obs_key = None
     scale = None
     transpose_order = [2,0,1] # Channels first
-    if is_multigrid:
+    if is_multigrid or is_minigrid:
         obs_key = 'image'
         scale = 10.0
 
@@ -205,16 +230,24 @@ def create_parallel_env(args, adversary=True):
     if is_bipedalwalker:
         transpose_order = None
 
+    if is_procgen:
+        obs_key = 'image'
+        scale = 255.0
+
     venv = VecPreprocessImageWrapper(venv=venv, obs_key=obs_key,
             transpose_order=transpose_order, scale=scale)
 
-    if is_multigrid or is_bipedalwalker:
+    if is_multigrid or is_bipedalwalker or is_minigrid or is_procgen:
         ued_venv = venv
 
     if args.singleton_env:
         seeds = [args.seed]*args.num_processes
     else:
-        seeds = [i for i in range(args.num_processes)]
+        if args.offset_seed:
+            # This can support up to 1000 random seeds (0-999) and up to 10000 num_processes (0-9999) before there are seed overlaps
+            seeds = [int(args.seed)*10000 + i for i in range(args.num_processes)]
+        else:
+            seeds = [i for i in range(args.num_processes)]
     venv.set_seed(seeds)
 
     return venv, ued_venv
@@ -250,3 +283,39 @@ def make_plr_args(args, obs_space, action_space):
         use_dense_rewards=is_dense_reward_env(args.env_name),
         gamma=args.gamma
     )
+
+def make_param_distrib_args(args, device=None):
+    param_distrib_args = dict(
+        strategy=args.param_distrib_strategy,
+        env_name=args.env_name,
+        num_processes=args.num_processes,
+        seed=args.seed,
+    )
+    if args.param_distrib_config is not None:
+        param_distrib_args.update(args.param_distrib_config)
+
+    eval_config = dict(
+        num_processes=args.test_num_processes,
+        num_episodes=args.test_num_episodes,
+        frame_stack=args.frame_stack,
+        grayscale=args.grayscale,
+        num_action_repeat=args.num_action_repeat,
+        use_global_critic=args.use_global_critic,
+        use_global_policy=args.use_global_policy,
+        device=device,
+        seed=args.test_seed,
+        stagger_seeds=args.test_stagger_seeds,
+        env_vectorization=args.env_vectorization,
+    )
+    param_distrib_args['eval_config'] = eval_config
+    param_distrib_args['deterministic_eval'] = args.deterministic_test_evaluation
+
+    eval_env_kwargs = {}
+    if 'Procgen' in args.test_env_names:
+        if args.env_vectorization == 'env':
+            eval_env_kwargs['num_procs'] = args.test_num_processes
+        eval_env_kwargs['resource_root'] = args.procgen_resource_root
+        eval_env_kwargs['prebuilt_root'] = args.procgen_prebuilt_root
+    param_distrib_args['eval_env_kwargs'] = eval_env_kwargs
+
+    return param_distrib_args
