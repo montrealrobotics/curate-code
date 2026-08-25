@@ -19,6 +19,7 @@ from util import \
     set_obs_at_index
 
 from teachDeepRL.teachers.teacher_controller import TeacherController
+from param_distrib import load_param_distrib
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -41,6 +42,7 @@ class AdversarialRunner(object):
         flexible_protagonist=False,
         train=False,
         plr_args=None,
+        param_distrib_args=None,
         device='cpu'):
         """
         venv: Vectorized, adversarial gym env with agent-specific wrappers.
@@ -78,6 +80,7 @@ class AdversarialRunner(object):
         self.requires_batched_vloss = (args.use_editor and args.base_levels == 'easy' and args.use_accel_paired==False)
 
         self.is_alp_gmm = args.ued_algo == 'alp_gmm' 
+        self.is_param_distrib = args.ued_algo == 'parameter_distribution'
 
         # Track running mean and std of env returns for return normalization
         if args.adv_normalize_returns:
@@ -140,11 +143,21 @@ class AdversarialRunner(object):
         if self.is_alp_gmm:
             self._init_alp_gmm()
 
+        # Set up parameter distribution
+        self.param_distrib = None
+        if self.is_param_distrib:
+            self.param_distrib = load_param_distrib(**param_distrib_args)
+            self.param_distrib.initialize(self.agents['agent'])
+            self.param_distrib.check_and_reset_optimizer(agent.algo.optimizer)
+
     @property
     def use_byte_encoding(self):
         env_name = self.args.env_name
         if self.args.use_editor \
            or env_name.startswith('BipedalWalker') \
+           or env_name.startswith('MiniGrid') \
+           or env_name.startswith('Procgen') \
+           or (env_name.startswith('MultiGrid') and self.is_param_distrib) \
            or (env_name.startswith('MultiGrid') and self.args.use_reset_random_dr):
             return True
         else:
@@ -181,9 +194,11 @@ class AdversarialRunner(object):
         self.student_grad_updates = 0
         self.sampled_level_info = None
 
-        max_return_queue_size = 10
-        self.agent_returns = deque(maxlen=max_return_queue_size)
-        self.adversary_agent_returns = deque(maxlen=max_return_queue_size)
+        # max_return_queue_size = 10
+        # self.agent_returns = deque(maxlen=max_return_queue_size)
+        # self.adversary_agent_returns = deque(maxlen=max_return_queue_size)
+        self.agent_returns = []
+        self.adversary_agent_returns = []
 
     def train(self):
         self.is_training = True
@@ -367,6 +382,49 @@ class AdversarialRunner(object):
 
         return stats
 
+    def _get_env_stats_minigrid(self, agent_info, adversary_agent_info):
+        infos = self.venv.get_complexity_info()
+        num_envs = len(infos)
+
+        keys_to_average = ['num_rooms', 'avg_eq_room_size']
+        keys_to_concat = ['room_sizes']
+
+        stats = {}
+
+        for k in keys_to_average:
+            sums = defaultdict(float)
+            for info in infos:
+                sums[k] += info[k]
+            stats['track_' + k] = sums[k]/num_envs
+
+        for k in keys_to_concat:
+            concats = [info[k] for info in infos]
+            stats['track_' + k] = concats
+
+        return stats
+
+    def _get_env_stats_procgen(self, agent_info, adversary_agent_info):
+        infos = self.venv.get_complexity_info()
+        num_envs = len(infos)
+
+        level_option_keys = [k for k in infos[0].keys() if 'level_option_' in k]
+        keys_to_average = level_option_keys
+        keys_to_concat = level_option_keys
+
+        stats = {}
+
+        for k in keys_to_average:
+            sums = defaultdict(float)
+            for info in infos:
+                sums[k] += info[k]
+            stats['track_avg_' + k] = sums[k]/num_envs
+
+        for k in keys_to_concat:
+            concats = [info[k] for info in infos]
+            stats['track_' + k] = concats
+
+        return stats
+
     def _get_env_stats(self, agent_info, adversary_agent_info, log_replay_complexity=False):
         env_name = self.args.env_name
         if env_name.startswith('MultiGrid'):
@@ -375,6 +433,10 @@ class AdversarialRunner(object):
             stats = self._get_env_stats_car_racing(agent_info, adversary_agent_info)
         elif env_name.startswith('BipedalWalker'):
             stats = self._get_env_stats_bipedalwalker(agent_info, adversary_agent_info)
+        elif env_name.startswith('MiniGrid'):
+            stats = self._get_env_stats_minigrid(agent_info, adversary_agent_info)
+        elif env_name.startswith('Procgen'):
+            stats = self._get_env_stats_procgen(agent_info, adversary_agent_info)
         else:
             raise ValueError(f'Unsupported environment, {self.args.env_name}')
 
@@ -441,7 +503,7 @@ class AdversarialRunner(object):
         level_samplers = self.all_level_samplers
 
         if self.args.reject_unsolvable_seeds:
-            solvable = np.array(solvable, dtype=np.bool)
+            solvable = np.array(solvable, dtype=bool)
             seeds = np.array(seeds, dtype=np.int)[solvable]
             solvable = solvable[solvable]
 
@@ -505,6 +567,14 @@ class AdversarialRunner(object):
                 obs = self.alp_gmm_teacher.set_env_params(self.ued_venv)
                 self.total_seeds_collected += args.num_processes
                 return
+            elif self.is_param_distrib:
+                # sample from parameter distribution
+                params = [self.param_distrib.sample(p) for p in range(args.num_processes)]
+                self.ued_venv.reset_to_params_batch(params)
+                if args.use_plr:
+                    self._update_plr_with_current_unseen_levels(parent_seeds=fixed_seeds)
+                self.total_seeds_collected += args.num_processes
+                return
             else:
                 obs = self.ued_venv.reset() # Prepare for constructive rollout
                 self.total_seeds_collected += args.num_processes
@@ -522,7 +592,7 @@ class AdversarialRunner(object):
 
         if level_sampler and level_replay:
             rollout_info.update({
-                'solved_idx': np.zeros(args.num_processes, dtype=np.bool)
+                'solved_idx': np.zeros(args.num_processes, dtype=bool)
             })
             
         for step in range(num_steps):
@@ -534,12 +604,31 @@ class AdversarialRunner(object):
                 value, action, action_log_dist, recurrent_hidden_states = agent.act(
                     obs_id, agent.storage.get_recurrent_hidden_state(step), agent.storage.masks[step])
                 if self.is_discrete_actions:
-                    action_log_prob = action_log_dist.gather(-1, action)
+                    action_dim = action.shape[1]
+                    if agent.storage.action_nvec is None:
+                        assert action_dim == 1
+                        action_log_prob = action_log_dist.gather(-1, action)
+                    else:
+                        idx_offset = 0
+                        action_log_prob_as_list = []
+                        for a in range(action_dim):
+                            action_nvec_this_dim = agent.storage.action_nvec[a]
+                            idx = np.arange(action_nvec_this_dim) + idx_offset
+                            action_log_dist_this_dim = action_log_dist[:,idx]
+                            action_log_prob_this_dim = action_log_dist_this_dim.gather(-1, action[:,a].reshape(-1,1))
+                            action_log_prob_as_list.append(
+                                action_log_prob_this_dim
+                            )
+                            idx_offset += action_nvec_this_dim
+                        action_log_prob = torch.cat(action_log_prob_as_list, dim=1).sum(dim=1).unsqueeze(-1)
                 else:
                     action_log_prob = action_log_dist
 
             # Observe reward and next obs
             reset_random = self.is_dr and not args.use_plr
+            if self.is_param_distrib and not args.use_plr:
+                # we need to reset environments using reset_to_params
+                raise NotImplementedError
             _action = agent.process_action(action.cpu())
 
             if is_env:
@@ -558,7 +647,7 @@ class AdversarialRunner(object):
                             infos[i]['truncated'] = True
                             infos[i]['truncated_obs'] = get_obs_at_index(obs, i)
 
-                done = np.ones_like(done, dtype=np.float)
+                done = np.ones_like(done, dtype=float)
 
             if level_sampler and level_replay:
                 next_level_seeds = [s for s in self.current_level_seeds]
@@ -758,6 +847,15 @@ class AdversarialRunner(object):
             env_return = env_return.clamp(-clip_max_abs, clip_max_abs)
         
         return env_return
+
+    def _compute_env_return_all(self, agent_info, adversary_agent_info):
+        args = self.args
+        if args.ued_algo == 'parameter_distribution':
+            env_return_all = agent_info['returns']
+        else:
+            raise NotImplementedError
+
+        return env_return_all
 
     def run(self):
         args = self.args
@@ -1032,6 +1130,15 @@ class AdversarialRunner(object):
                 'update_info': info
             })
 
+        # Post run update for parameter distribution
+        if self.is_param_distrib:
+            env_return_for_param_distrib = self._compute_env_return_all(agent_info, adversary_agent_info)
+            self.param_distrib.update(
+                returns=env_return_for_param_distrib,
+                agent=self.agents['agent'],
+            )
+            self.param_distrib.check_and_reset_optimizer(agent.algo.optimizer)
+
         if self.is_training:
             self.num_updates += 1
 
@@ -1056,31 +1163,42 @@ class AdversarialRunner(object):
         if args.use_plr and args.log_plr_buffer_stats:
             stats.update(self._get_plr_buffer_stats())
 
+        self.agent_returns.clear()
         [self.agent_returns.append(r) for b in agent_info['returns'] for r in reversed(b)]
         mean_agent_return = 0
+        std_agent_return = 0
         if len(self.agent_returns) > 0:
             mean_agent_return = np.mean(self.agent_returns)
+            std_agent_return = np.std(self.agent_returns)
 
         mean_adversary_agent_return = 0
+        std_adversary_agent_return = 0
         if self.is_paired or self.use_accel_paired:
+            self.adversary_agent_returns.clear()
             [self.adversary_agent_returns.append(r) for b in adversary_agent_info['returns'] for r in reversed(b)]
             if len(self.adversary_agent_returns) > 0:
                 mean_adversary_agent_return = np.mean(self.adversary_agent_returns)
+                std_adversary_agent_return = np.std(self.adversary_agent_returns)
 
         self.sampled_level_info = sampled_level_info
 
         stats.update({
+            'num_updates': self.num_updates,
             'steps': (self.num_updates + self.total_num_edits) * args.num_processes * args.num_steps,
             'total_episodes': self.total_episodes_collected,
             'total_seeds': self.total_seeds_collected,
             'total_student_grad_updates': self.student_grad_updates,
 
             'mean_agent_return': mean_agent_return,
+            'std_agent_return': std_agent_return,
+            'agent_returns': agent_info['returns'],
             'agent_value_loss': agent_info['value_loss'],
             'agent_pg_loss': agent_info['action_loss'],
             'agent_dist_entropy': agent_info['dist_entropy'],
 
             'mean_adversary_agent_return': mean_adversary_agent_return,
+            'std_adversary_agent_return': std_adversary_agent_return,
+            'adversary_agent_returns': adversary_agent_info['returns'],
             'adversary_value_loss': adversary_agent_info['value_loss'],
             'adversary_pg_loss': adversary_agent_info['action_loss'],
             'adversary_dist_entropy': adversary_agent_info['dist_entropy'],
@@ -1108,5 +1226,12 @@ class AdversarialRunner(object):
                 'agent_action_complexity': agent_info['action_complexity'],
                 'adversary_action_complexity': adversary_agent_info['action_complexity']  
             }) 
+
+        if self.is_param_distrib:
+            param_distrib_stats = self.param_distrib.get_stats()
+            param_distrib_stats_newkeys = {}
+            for k, v in param_distrib_stats.items():
+                param_distrib_stats_newkeys[f"param_distrib:{k}"] = v
+            stats.update(param_distrib_stats_newkeys)
 
         return stats
