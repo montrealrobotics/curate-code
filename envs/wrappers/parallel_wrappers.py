@@ -79,6 +79,8 @@ def worker(remote, parent_remote, env_fn_wrappers):
                 remote.send([envs[0].reset_to_level(data)])
             elif cmd == 'reset_alp_gmm':
                 remote.send([envs[0].reset_alp_gmm(data)])
+            elif cmd == 'reset_to_params':
+                remote.send([envs[0].reset_to_params(data)])
             elif cmd == 'max_episode_steps':
                 max_episode_steps = get_env_attr(envs[0], '_max_episode_steps')
                 remote.send(max_episode_steps)
@@ -233,7 +235,7 @@ class ParallelAdversarialVecEnv(SubprocVecEnv):
     def __init__(self, env_fns, adversary=True, is_eval=False):
         super().__init__(env_fns, is_eval=is_eval)
         action_space = self.action_space
-        if action_space.__class__.__name__ == 'Box':
+        if action_space.__class__.__name__ in ['Box', 'MultiDiscrete']:
             self.action_dim = action_space.shape[0]
         else:
             self.action_dim = 1
@@ -241,7 +243,7 @@ class ParallelAdversarialVecEnv(SubprocVecEnv):
         self.adv_action_dim = 0
         if adversary:
             adv_action_space = self.adversary_action_space
-            if adv_action_space.__class__.__name__ == 'Box':
+            if adv_action_space.__class__.__name__ in ['Box', 'MultiDiscrete']:
                 self.adv_action_dim = adv_action_space.shape[0]
             else:
                 self.adv_action_dim = 1
@@ -348,6 +350,24 @@ class ParallelAdversarialVecEnv(SubprocVecEnv):
         obs = _flatten_list(obs)
         return _flatten_obs(obs)
 
+    # reset_to_param
+    def reset_to_params(self, params, index):
+        self._assert_not_closed()
+        self.remotes[index].send(('reset_to_params', params))
+        self.waiting = True
+        obs = self.remotes[index].recv()
+        self.waiting = False
+        return _flatten_obs(obs)
+
+    def reset_to_params_batch(self, params_batch):
+        self._assert_not_closed()
+        [remote.send(('reset_to_params', params_batch[i])) for i, remote in enumerate(self.remotes)]
+        self.waiting = True
+        obs = [remote.recv() for remote in self.remotes]
+        self.waiting = False
+        obs = _flatten_list(obs)
+        return _flatten_obs(obs)
+
     # mutate level
     def mutate_level(self, num_edits):
         self._assert_not_closed()
@@ -381,6 +401,14 @@ class ParallelAdversarialVecEnv(SubprocVecEnv):
         self.remotes[0].send(('adversary_action_space', None))
         action_dim = self.remotes[0].recv()
         return action_dim
+
+    def sample_adversary_action_space(self, index):
+        self._assert_not_closed()
+        self.remotes[index].send(('sample_adversary_action_space', None))
+        self.waiting = True
+        sampled_adversary_action = self.remotes[index].recv()[0]
+        self.waiting = False
+        return sampled_adversary_action
 
     def get_max_episode_steps(self):
         self._assert_not_closed()
