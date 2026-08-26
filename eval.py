@@ -35,6 +35,7 @@ from envs.multigrid.mst_maze import *
 from envs.box2d import *
 from envs.bipedalwalker import *
 from envs.minigrid import *
+from envs.procgen import *
 from envs.wrappers import VecMonitor, VecPreprocessImageWrapper, ParallelAdversarialVecEnv, ParallelAdversarialLinkedVecEnv, \
 	MultiGridFullyObsWrapper, VecFrameStack, CarRacingWrapper
 from util import DotDict, str2bool, make_agent, create_parallel_env, is_discrete_actions

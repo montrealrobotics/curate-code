@@ -32,6 +32,7 @@ from envs.multigrid.adversarial import *
 from envs.box2d import *
 from envs.bipedalwalker import *
 from envs.minigrid import *
+from envs.procgen import *
 from envs.runners.adversarial_runner import AdversarialRunner 
 from util import make_agent, FileWriter, safe_checkpoint, create_parallel_env, make_plr_args, save_images, make_param_distrib_args
 from eval import Evaluator
