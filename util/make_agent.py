@@ -11,6 +11,7 @@ from models import \
     CarRacingBezierAdversaryEnvNetwork, \
     BipedalWalkerStudentPolicy, \
     BipedalWalkerAdversaryPolicy, \
+    ProcgenPolicy, \
     BipedalWalkerRecurrentStudentPolicy, \
     BipedalWalkerRecurrentAdversaryPolicy
 
@@ -128,6 +129,34 @@ def model_for_bipedalwalker_agent(
 
     return model
 
+
+def model_for_procgen_agent(
+    env,
+    agent_type='agent',
+    recurrent_arch=None,
+    recurrent_hidden_size=256,
+    ):
+
+    if 'adversary_env' in agent_type:
+        raise NotImplementedError
+    else:
+        if not recurrent_arch:
+            use_recurrent = False
+            hidden_size = 256
+        else:
+            assert recurrent_arch == 'gru'
+            use_recurrent = True
+            hidden_size = recurrent_hidden_size
+
+        model = ProcgenPolicy(
+            env.observation_space['image'].shape,
+            env.action_space.n,
+            arch='large',
+            base_kwargs={'recurrent': use_recurrent, 'hidden_size': hidden_size}
+        )
+    return model
+
+
 def model_for_env_agent(
     env_name,
     env,
@@ -179,6 +208,13 @@ def model_for_env_agent(
             recurrent_hidden_size=recurrent_hidden_size,
             use_global_critic=use_global_critic,
             use_global_policy=use_global_policy)
+    elif env_name.startswith('Procgen'):
+        model = model_for_procgen_agent(
+            env=env,
+            agent_type=agent_type,
+            recurrent_arch=recurrent_arch,
+            recurrent_hidden_size=recurrent_hidden_size,
+        )
     else:
         raise ValueError(f'Unsupported environment {env_name}.')
 
