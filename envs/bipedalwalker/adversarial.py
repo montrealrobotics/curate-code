@@ -434,6 +434,21 @@ class BipedalWalkerAdversarialEnv(BipedalWalkerCustom):
 
         return obs, 0, done, {}
 
+    def reset_to_params(self, params):
+        # this is a variation of reset_random
+        # clip params
+        param_ranges = self.param_ranges
+        self.level_params_vec = [
+            np.clip(params[i], param_range[0], param_range[1]) for i, param_range in enumerate(param_ranges.values())
+        ]
+        self._update_params(self.level_params_vec)
+
+        self.level_seed = rand_int_seed()
+
+        self._reset_env_config()
+
+        return self.reset_agent()
+
 class BipedalWalkerDev(BipedalWalker):
     def __init__(self, random_z_dim=5):
         super().__init__()

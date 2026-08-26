@@ -43,6 +43,52 @@ class BipedalWalkerDefault(BipedalWalkerCustom):
         super().seed(int(str(time.time() / 1000)[-3:]))
         return super()._reset_env()
 
+class BipedalWalkerParams(BipedalWalkerCustom):
+    def __init__(self, env_params):
+
+        ground_roughness_in, pit_gap_1_in, pit_gap_2_in, stump_height_1_in, stump_height_2_in, stair_height_1_in, stair_height_2_in, stair_steps_in = env_params
+
+        ground_roughness = np.clip(ground_roughness_in, 0.0, 10.0)
+
+        pit_gap_1 = np.clip(pit_gap_1_in, 0.0, 10.0)
+        pit_gap_2 = np.clip(pit_gap_2_in, 0.0, 10.0)
+        pit_gap = [pit_gap_1, pit_gap_2]
+        pit_gap.sort()
+
+        default_stump_width = [1, 2]
+
+        stump_height_1 = np.clip(stump_height_1_in, 0.0, 5.0)
+        stump_height_2 = np.clip(stump_height_2_in, 0.0, 5.0)
+        stump_height = [stump_height_1, stump_height_2]
+        stump_height.sort()
+
+        default_stump_float = [0, 1]
+
+        stair_height_1 = np.clip(stair_height_1_in, 0.0, 5.0)
+        stair_height_2 = np.clip(stair_height_2_in, 0.0, 5.0)
+        stair_height = [stair_height_1, stair_height_2]
+        stair_height.sort()
+
+        default_stair_width = [4, 5]
+
+        stair_steps = [np.clip(stair_steps_in, 1.0, 9.0)]
+
+        config = get_config(
+            name='custom_config',
+            ground_roughness=ground_roughness,
+            pit_gap=pit_gap,
+            stump_width=default_stump_width,
+            stump_height=stump_height,
+            stump_float=default_stump_float,
+            stair_height=stair_height,
+            stair_width=default_stair_width,
+            stair_steps=stair_steps,
+        )
+        super().__init__(env_config=config, seed=int(str(time.time() / 1000)[-3:]))
+    def reset(self):
+        super().seed(int(str(time.time() / 1000)[-3:]))
+        return super()._reset_env()
+
 ## stump height
 class BipedalWalkerMedStumps(BipedalWalkerCustom):
     def __init__(self):
@@ -162,6 +208,25 @@ class BipedalWalkerInsane(BipedalWalkerCustom):
         super().seed(int(str(time.time() / 1000)[-3:]))
         return super()._reset_env()
 
+# everything maxed out - BipedalWalkerInsane didn't max out ground_roughness
+class BipedalWalkerMax(BipedalWalkerCustom):
+    def __init__(self):
+        config = get_config(
+            stump_height=[5, 5],
+            stump_width=[1, 2],
+            stump_float=[0, 1],
+            pit_gap=[10, 10],
+            stair_height=[5, 5],
+            stair_steps=[9],
+            stair_width=[4, 5],
+            ground_roughness=10
+        )
+        super().__init__(env_config=config, seed=int(str(time.time() / 1000)[-3:]))
+
+    def reset(self):
+        super().seed(int(str(time.time() / 1000)[-3:]))
+        return super()._reset_env()
+
 ## PCG "Extremely Challenging" Env
 # First samples params, then generates level
 class BipedalWalkerXChal(BipedalWalkerCustom):
@@ -261,6 +326,10 @@ gym_register(id='BipedalWalker-Default-v0',
              entry_point=module_path + ':BipedalWalkerDefault',
              max_episode_steps=2000)
 
+gym_register(id='BipedalWalker-Params-v0',
+             entry_point=module_path + ':BipedalWalkerParams',
+             max_episode_steps=2000)
+
 gym_register(id='BipedalWalker-Med-Roughness-v0',
              entry_point=module_path + ':BipedalWalkerMedRoughness',
              max_episode_steps=2000)
@@ -295,6 +364,10 @@ gym_register(id='BipedalWalker-Wide-PitGap-v0',
 
 gym_register(id='BipedalWalker-Insane-v0',
              entry_point=module_path + ':BipedalWalkerInsane',
+             max_episode_steps=2000)
+
+gym_register(id='BipedalWalker-Max-v0',
+             entry_point=module_path + ':BipedalWalkerMax',
              max_episode_steps=2000)
 
 gym_register(id='BipedalWalker-XChal-v0',
