@@ -12,6 +12,7 @@ from .adversarial_jumper import *
 from .adversarial_leaper import *
 from .adversarial_maze import *
 from .adversarial_miner import *
+from .adversarial_ninja import *
 from .adversarial_procgen import *
 from .bigfish import *
 from .bossfight import *
@@ -27,4 +28,5 @@ from .jumper import *
 from .leaper import *
 from .maze import *
 from .miner import *
+from .ninja import *
 from .procgen import *
