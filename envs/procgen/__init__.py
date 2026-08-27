@@ -2,11 +2,13 @@ from .adversarial_bigfish import *
 from .adversarial_bossfight import *
 from .adversarial_caveflyer import *
 from .adversarial_chaser import *
+from .adversarial_climber import *
 from .adversarial_coinrun import *
 from .adversarial_procgen import *
 from .bigfish import *
 from .bossfight import *
 from .caveflyer import *
 from .chaser import *
+from .climber import *
 from .coinrun import *
 from .procgen import *
