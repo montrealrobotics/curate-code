@@ -19,11 +19,6 @@ images/
 !docs/images
 tf_models/
 wandb/
-baselines/
-babyai/
-gym-minigrid/
-procgen/
-gym-minigrid/
 rsync_exclude.txt
 src/
 figures/
