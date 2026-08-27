@@ -81,7 +81,6 @@ for mode in distribution_modes_to_use:
             for w in p2_params_this_mode:
 
                 mode_str = mode[0].upper() + mode[1:]
-                act_str = ""
                 if act != "original":
                     raise NotImplementedError
 
