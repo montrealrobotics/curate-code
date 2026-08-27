@@ -5,6 +5,8 @@ from .adversarial_chaser import *
 from .adversarial_climber import *
 from .adversarial_coinrun import *
 from .adversarial_dodgeball import *
+from .adversarial_fruitbot import *
+from .adversarial_fruitbot_inv import *
 from .adversarial_procgen import *
 from .bigfish import *
 from .bossfight import *
@@ -13,4 +15,6 @@ from .chaser import *
 from .climber import *
 from .coinrun import *
 from .dodgeball import *
+from .fruitbot import *
+from .fruitbot_inv import *
 from .procgen import *
