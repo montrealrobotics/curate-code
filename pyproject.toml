@@ -2,7 +2,7 @@
 name = "curate-code"
 version = "0.1.0"
 description = "Code implementation for CURATE (TMLR 2026), an automatic curriculum learning algorithm for reinforcement learning agents"
-readme = "README.md"
+readme = "README.MD"
 requires-python = "==3.8.19"
 dependencies = [
     "baselines",

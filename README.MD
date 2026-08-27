@@ -1,289 +1,70 @@
-# Dual Curriculum Design
+# CURATE
 
-[![License: CC BY-SA 4.0](https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-sa/4.0/)
+This is the official implementation of [CURATE (TMLR 2026)](https://montrealrobotics.ca/curate/), an automatic curriculum learning algorithm for reinforcement learning agents.
+This implementation also features an example integration with the [Procgen Curriculum Suite](https://github.com/montrealrobotics/procgen-curriculum), which was also introduced in the CURATE work.
 
-![DCD overview diagram](/docs/images/dcd_overview.png#gh-light-mode-only)
-![DCD overview diagram](/docs/images/dcd_overview_darkmode.png#gh-dark-mode-only)
+# Installation
 
-This codebase contains an extensible framework for implementing various Unsupervised Environment Design (UED) algorithms, including state-of-the-art Dual Curriculum Design (DCD) algorithms with minimax-regret robustness properties like ACCEL and Robust PLR:
-- [ACCEL](https://accelagent.github.io/)
-- [Robust PLR](https://arxiv.org/abs/2110.02439)
-- [PLR](https://arxiv.org/abs/2010.03934)
-- [REPAIRED](https://arxiv.org/abs/2110.02439)
-- [PAIRED](https://arxiv.org/abs/2012.02096)
-- [ALP-GMM](https://arxiv.org/abs/1910.07224)
-- [Minimax adversarial training](https://arxiv.org/abs/2012.02096)
-- [Domain randomization (DR)](https://arxiv.org/abs/1703.06907)
-- [PAIRED+HiEnt+BC+Evo](https://arxiv.org/abs/2308.10797)
+The following instructions have been verified for Linux Ubuntu 24.04.2.
 
-We also include experiment configurations for the main experiments in the following papers on DCD methods:
-- [Replay-Guided Adversarial Design. Jiang et al, 2021 (NeurIPS 2021)](https://arxiv.org/abs/2110.02439)
-- [Evolving Curricula with Regret-Based Environment Design. Parker-Holder et al, 2022 (ICML 2022)](https://accelagent.github.io/)
-- [Stabilizing Unsupervised Environment Design with a Learned Adversary. Mediratta et al, 2023 (CoLLAs 2023)](https://arxiv.org/abs/2308.10797)
-
-## Citation
-The core components of this codebase, as well as the `CarRacingBezier` and `CarRacingF1` environments, were introduced in [Jiang et al, 2021](https://arxiv.org/abs/2110.02439). If you use this code to develop your own UED algorithms in academic contexts, please cite 
-
-    Jiang et al, "Replay-Guided Adversarial Environment Design", 2021.
-([Bibtex here](https://raw.githubusercontent.com/facebookresearch/dcd/main/docs/bibtex/dcd.bib))
-
-Additionally, if you use ACCEL or the adversarial `BipedalWalker` environments in academic contexts, please cite 
-    
-    Parker-Holder et al, "Evolving Curricula with Regret-Based Environment Design", 2022.
-([Bibtex here](https://raw.githubusercontent.com/facebookresearch/dcd/main/docs/bibtex/accel.bib))
-
-Finally, if you use PAIRED with High Entropy (HiEnt) and/or Behavioral Cloning (BC) and/or Evo method, please cite
-
-    Mediratta et al, "Stabilizing Unsupervised Environment Design with a Learned Adversary", 2023.
-([Bibtex here](https://raw.githubusercontent.com/facebookresearch/dcd/main/docs/bibtex/collas.bib))
-
-## Setup
-To install the necessary dependencies, run the following commands:
+## Downloading the codebase
 ```
-conda create --name dcd python=3.8
-conda activate dcd
-pip install -r requirements.txt
-git clone https://github.com/openai/baselines.git
-cd baselines
-pip install -e .
-cd ..
-pip install pyglet==1.5.11
+cd path/to/ws/
+git clone --recursive git@github.com:montrealrobotics/curate-code.git
+cd curate-code/
 ```
 
-## A quick overview of [`train.py`](https://github.com/facebookresearch/dcd/blob/master/train.py)
-
-### Choosing a UED algorithm
-The exact UED algorithm is specified by a combination of values for `--ued_algo`, `--use_plr`, `no_exploratory_grad_updates`, and  `--ued_editor`:
-| Method        | `ued_algo`  | `use_plr`| `no_exploratory_grad_updates` | `ued_editor`| 
-| ------------- |:-------------|:-------------|:-------------|:-------------|
-| DR | `domain_randomization` | `false` | `false` | `false` |
-| PLR | `domain_randomization` | `true` | `false`  | `false` |
-| PLR<sup>⊥</sup> | `domain_randomization` | `true` | `true` | `false` |
-| ACCEL | `domain_randomization` | `true` | `true` | `true` |
-| PAIRED | `paired` | `false` | `false` | `false` |
-| REPAIRED | `paired` | `true` | `true`  | `false` |
-| Minimax | `minimax` | `false` | `false` | `false` |
+## uv
+[uv](https://docs.astral.sh/uv/) is a package and project manager. First, install and setup uv using the instructions:
+[https://docs.astral.sh/uv/getting-started/](https://docs.astral.sh/uv/getting-started/)
 
 
-Full details for the command-line arguments related to PLR and ACCEL can be found in [`arguments.py`](https://github.com/facebookresearch/dcd/blob/master/arguments.py). We provide simple configuration JSON files for generating the `train.py` commands for the best hyperparameters found in experimental settings from prior works.
-
-### Logging
-By default, `train.py` generates a folder in the directory specified by the `--log_dir` argument, named according to `--xpid`. This folder contains the main training logs, `logs.csv`, and periodic screenshots of generated levels in the directory `screenshots`. Each screenshot uses the naming convention `update_<number of PPO updates>.png`. When ACCEL is turned on, the screenshot naming convention also includes information about whether the level was replayed via PLR and the mutation generation number for the level, i.e. how many mutation cycles led to this level.
-
-### Checkpointing
-**Latest checkpoint**
-The latest model checkpoint is saved as `model.tar`. The model is checkpointed every `--checkpoint_interval` number of updates. When setting `--checkpoint_basis=num_updates` (default), the checkpoint interval corresponds to number of rollout cycles (which includes one rollout for each student and teacher). Otherwise, when `--checkpoint_basis=student_grad_updates`, the checkpoint interval corresponds to the number of PPO updates performed by the student agent only. This latter checkpoint basis allows comparing methods based on number of gradient updates actually performed by the student agent, which can differ from number of rollout cycles, as methods based on Robust PLR, like ACCEL, do not perform student gradient updates every rollout cycle.
-
-**Archived checkpoints**
-Separate archived model checkpoints can be saved at specific intervals by specifying a positive value for the argument `--archive_interval`. For example, setting `--archive_interval=1250` and `--checkpoint_basis=student_grad_updates` will result in saving model checkpoints named `model_1250.tar`, `model_2500.tar`, and so on. These archived models are saved in addition to `model.tar`, which always stores the latest checkpoint, based on `--checkpoint_interval`.
-
-## Evaluating agents with [`eval.py`](https://github.com/facebookresearch/dcd/blob/master/eval.py)
-
-### Evaluating a single model
-The following command evaluates a `<model>.tar` in an experiment results directory, `<xpid>`, in a base log output directory `<log_dir>` for `<num_episodes>` episodes in each of the environments named `<env_name1>`, `<env_name1>`, and `<env_name1>`, and outputs the results as a .csv in `<result_dir>`.
-```shell
-python -m eval \
---base_path <log_dir> \
---xpid <xpid> \
---model_tar <model>
---env_names <env_name1>,<env_name2>,<env_name3> \
---num_episodes <num_episodes> \
---result_path <result_dir>
+(Optional) If you would like to pin a particular version of Python, please enter it here. By default, Python 3.8.19 is used, which is the version we used for testing.
+```
+uv python pin 3.8.19
 ```
 
-### Evaluating multiple models
-Similarly, the following command evaluates all models named `<model>.tar` in experiment results directories matching the prefix `<xpid_prefix>`. This prefix argument is useful for evaluating models from a set of training runs with the same hyperparameter settings. The resulting .csv will contain a column for each model matched and evaluated this way.
-```shell
-python -m eval \
---base_path <log_dir> \
---prefix <xpid_prefix> \
---model_tar <model> \
---env_names <env_name1>,<env_name2>,<env_name3> \
---num_episodes <num_episodes> \
---accumulator mean \
---result_path <result_dir>
+To install using uv, please run:
+```
+uv sync
 ```
 
-### Evaluating on zero-shot benchmarks
-Replacing the `--env_names=...` argument with the `--benchmark=<benchmark>` argument will perform evaluation over a set of benchmark test environments for the domain specified by `<benchmark>`. The various zero-shot benchmarks are described below:
-| `benchmark`        | Description  |
-| ------------- |:-------------|
-| `maze` | Human-designed mazes, including singleton and procedurally-generated designs. | 
-| `f1` | The full `CarRacing-F1` benchmark: 20 challenging tracks from the Formula-1. |
-| `bipedal` | `BipedalWalker-v3`, `BipedalWalkerHardcore-v3`, and isolated challenges for stairs, stumps, pit gaps, and ground roughness.  |
-| `poetrose` | Environments based on the most extremely challenging level settings discovered by POET, as reported in the red polygons in the top two rows of Figure 5 in [Wang et al, 2019](https://arxiv.org/abs/1901.01753). |
+# Example commands
 
+The following commands are lightly edited from the commands we used to run CURATE experiments on a SLURM HPC cluster (e.g., fewer environment steps). The hyperparameters used here are the same as in the paper.
 
-## Running experiments
-We provide configuration json files to generate the `train.py` commands for the specific experiment settings featured in the main results of previous works. To generate the command to launch 1 run of the experiment described by the configuration file `config.json` in the folder `train_scripts/grid_configs`, simply run the following, and copy and paste the output into your command line. 
-```shell
-python train_scripts/make_cmd.py --json config --num_trials 1
+To try running CURATE for MiniGrid MultiRoom:
+```
+export EXPERIMENT_SEED=0; uv run python -m train --xpid=MiniGrid-MultiRoom-N1to4-S4to7-G13-T80-Adversarial-v0-testN4to4S4to7G13T80-nostop-Curate-tsrt0p3t0p7-keeptarget --env_name=MiniGrid-MultiRoom-N1to4-S4to7-G13-T80-Adversarial-v0 --use_gae=True --gamma=0.995 --gae_lambda=0.95 --seed=-99 --seed_variable=EXPERIMENT_SEED --offset_seed=True --append_seed_to_xpid=True --seed_variable_offset=0 --recurrent_arch=lstm --recurrent_agent=True --recurrent_adversary_env=False --recurrent_hidden_size=256 --lr=0.0001 --num_steps=256 --num_processes=32 --env_vectorization=dcd --num_env_steps=25000000 --ppo_epoch=5 --num_mini_batch=1 --entropy_coef=0.0 --value_loss_coef=0.5 --clip_param=0.2 --clip_value_loss=True --adv_entropy_coef=0.0 --max_grad_norm=0.5 --normalize_returns=False --algo=ppo --ued_algo=parameter_distribution --param_distrib_strategy=Curate --param_distrib_config='{"min_params": 1, "max_params": 4, "num_param_steps": 4, "return_threshold": 0.3, "params_mean_init": "auto", "params_var_init": "auto", "min_params_var_diag": 0.1, "params_mean_shift_on_solve": "auto", "params_var_on_update": "auto", "eval_env_template": "MiniGrid-MultiRoom-N%P1to%P1-S4to7-G13-T80-v0", "reps_rounds": 2, "reps_rounds_init": 4, "samples_per_reps_round": 8, "reps_min_temperature": 0.05, "coef_param_reg_init": "auto", "lp_penalty": "auto", "use_lp_penalty_during_init": false, "lp_penalty_start_params_mode": "learned", "num_mc_samples": 5000000, "min_update_params_ctr": 16, "force_update_params_ctr": 128, "num_processes_eval": 4, "num_episodes_eval": 16, "keep_solved_target_task_returns": true}' --use_plr=True --level_replay_prob=0.0 --level_replay_rho=0.5 --level_replay_seed_buffer_size=4000 --level_replay_score_transform=rank --level_replay_temperature=0.3 --staleness_coef=0.3 --no_exploratory_grad_updates=False --use_editor=False --level_editor_prob=0 --level_editor_method=random --num_edits=0 --base_levels=batch --log_interval=1 --screenshot_interval=1000 --log_grad_norm=False --handle_timelimits=True --checkpoint_basis=student_grad_updates --level_replay_strategy=positive_value_loss --test_env_names=MiniGrid-MultiRoom-N4to4-S4to7-G13-T80-v0 --test_num_episodes=128 --test_num_processes=32 --early_stopping=False --test_interval=1 --deterministic_test_evaluation=False --test_seed=-99 --test_stagger_seeds=True --test_offset_seed=True --test_checkpoint=True --test_solved_checkpoint=True --test_solved_return_threshold=0.7 --log_dir=/path/to/curate/experiments/multiroom-n1to4s4to7/curate-tsrt0p3t0p7-keeptarget/seeds/multiroom-n1to4s4to7-nostop-curate-tsrt0p3t0p7-keeptarget --log_action_complexity=True --log_plr_buffer_stats=True --log_replay_complexity=True --reject_unsolvable_seeds=False --verbose --assert_cuda=True --assert_no_prior_xpid=True
 ```
 
-Alternatively, you can run the following to copy the command directly to your clipboard:
-
-```shell
-python train_scripts/make_cmd.py --json config --num_trials 1 | pbcopy
+To try running CURATE for CoinRun (`procgen_resource_root` and `procgen_prebuilt_root` can also be used to pass a prebuilt version of Procgen):
+```
+export EXPERIMENT_SEED=0; uv run python -m train --xpid=Procgen-CoinRun-Easy-D1to3-S1to5-Adversarial-v0-testD3to3S5to5-nostop-Curate-tsrt8-keeptarget --env_name=Procgen-CoinRun-Easy-D1to3-S1to5-Adversarial-v0 --use_gae=True --gamma=0.999 --gae_lambda=0.95 --seed=-99 --seed_variable=EXPERIMENT_SEED --offset_seed=True --append_seed_to_xpid=True --seed_variable_offset=0 --recurrent_arch=gru --recurrent_agent=False --recurrent_adversary_env=False --recurrent_hidden_size=1 --lr=0.0005 --num_steps=1024 --num_processes=64 --env_vectorization=env --num_env_steps=50000000 --ppo_epoch=3 --num_mini_batch=32 --entropy_coef=0.01 --value_loss_coef=0.5 --clip_param=0.2 --clip_value_loss=True --adv_entropy_coef=0.0 --max_grad_norm=0.5 --normalize_returns=True --algo=ppo --ued_algo=parameter_distribution --param_distrib_strategy=Curate --param_distrib_config='{"min_params": [1, 1], "max_params": [3, 5], "num_param_steps": [3, 5], "return_threshold": 8.0, "params_mean_init": "auto", "params_var_init": "auto", "min_params_var_diag": [0.1, 0.1], "params_mean_shift_on_solve": "auto", "params_var_on_update": "auto", "eval_env_template": "Procgen-CoinRun-Easy-D%P1to%P1-S%P2to%P2-v0", "reps_rounds": 2, "reps_rounds_init": 4, "samples_per_reps_round": 16, "reps_min_temperature": 0.05, "coef_param_reg_init": "auto", "lp_penalty": "auto", "use_lp_penalty_during_init": false, "lp_penalty_start_params_mode": "learned", "num_mc_samples": 5000000, "min_update_params_ctr": 16, "force_update_params_ctr": 128, "num_processes_eval": 16, "num_episodes_eval": 32, "parallel_eval_workers": 4, "keep_solved_target_task_returns": true, "params_mean_shift_mode": "directed"}' --use_plr=True --level_replay_prob=0.0 --level_replay_rho=0.5 --level_replay_seed_buffer_size=4000 --level_replay_score_transform=rank --level_replay_temperature=0.3 --staleness_coef=0.3 --no_exploratory_grad_updates=False --use_editor=False --level_editor_prob=0 --level_editor_method=random --num_edits=0 --base_levels=batch --log_interval=1 --screenshot_interval=0 --log_grad_norm=False --handle_timelimits=True --checkpoint_basis=student_grad_updates --level_replay_strategy=positive_value_loss --test_env_names=Procgen-CoinRun-Easy-D3to3-S5to5-v0 --test_num_episodes=128 --test_num_processes=64 --early_stopping=False --test_interval=1 --deterministic_test_evaluation=False --test_seed=-99 --test_stagger_seeds=True --test_offset_seed=True --test_checkpoint=True --test_solved_checkpoint=True --test_solved_return_threshold=8.0 --log_dir=/path/to/curate/experiments/coinrun-easy-d1to3s1to5/curate-tsrt8-keeptarget-pmsosdir/seeds/coinrun-easy-d1to3s1to5-nostop-curate-tsrt8-keeptarget-pmsosdir --log_action_complexity=True --log_plr_buffer_stats=True --log_replay_complexity=True --reject_unsolvable_seeds=False --verbose --assert_cuda=True --assert_no_prior_xpid=True
 ```
 
-The JSON files for training methods using the best hyperparameters settings in each environment are detailed below.
+To try running CURATE for BipedalWalker:
+```
+export EXPERIMENT_SEED=0; uv run python -m train --xpid=BipedalWalker-Adversarial-v0-test7envs-nostop-Curate-tsrt200-ocs0p25solved --env_name=BipedalWalker-Adversarial-v0 --use_gae=True --gamma=0.99 --gae_lambda=0.9 --seed=-99 --seed_variable=EXPERIMENT_SEED --offset_seed=True --append_seed_to_xpid=True --seed_variable_offset=0 --recurrent_arch=lstm --recurrent_agent=False --recurrent_adversary_env=False --recurrent_hidden_size=1 --use_global_critic=False --lr=0.0003 --num_steps=2048 --num_processes=16 --num_env_steps=1000000000 --ppo_epoch=5 --num_mini_batch=32 --entropy_coef=0.001 --value_loss_coef=0.5 --clip_param=0.2 --clip_value_loss=False --adv_entropy_coef=0.01 --max_grad_norm=0.5 --normalize_returns=True --use_lstm=False --algo=ppo --ued_algo=parameter_distribution --param_distrib_strategy=Curate --param_distrib_config='{"min_params": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], "max_params": [10.0, 10.0, 10.0, 5.0, 5.0, 5.0, 5.0, 9.0], "num_param_steps": [101, 101, 101, 51, 51, 51, 51, 91], "return_threshold": 200.0, "params_mean_init": "auto", "params_var_init": "auto", "min_params_var_diag": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], "params_mean_shift_on_solve": "auto", "params_mean_shift_on_solve_auto_divisor": 20.0, "params_var_on_update": "auto", "params_var_on_update_auto_divisor": 10.0, "eval_env_template": "BipedalWalker-Params-v0", "reps_rounds": 2, "reps_rounds_init": 8, "samples_per_reps_round": 64, "reps_min_temperature": 0.05, "coef_param_reg_max_learning_penalty": 10.0, "coef_param_reg_init": "auto", "lp_penalty_max_learning_penalty": 10.0, "lp_penalty": "auto", "use_lp_penalty_during_init": false, "lp_penalty_start_params_mode": "learned", "min_update_params_ctr": 128, "force_update_params_ctr": 256, "parallel_eval_workers": 8, "keep_solved_target_task_returns": true, "params_mean_shift_mode": "directed", "off_curriculum_strategy": "solved", "off_curriculum_strategy_prob": 0.25, "off_curriculum_sampling": "deterministic", "off_curriculum_return_set": "on_curriculum"}' --use_plr=True --level_replay_prob=0.0 --level_replay_rho=0.5 --level_replay_seed_buffer_size=1000 --level_replay_score_transform=rank --level_replay_temperature=0.1 --staleness_coef=0.5 --no_exploratory_grad_updates=False --use_editor=False --level_editor_prob=0 --level_editor_method=random --num_edits=0 --base_levels=batch --use_accel_paired=False --accel_paired_score_function=paired --use_behavioural_cloning=False --kl_loss_coef=0.0 --kl_update_step=1 --use_kl_only_agent=False --log_interval=1 --screenshot_interval=200 --log_grad_norm=True --checkpoint_basis=student_grad_updates --archive_interval=5000 --handle_timelimits=True --level_replay_strategy=positive_value_loss --test_env_names=BipedalWalker-v3,BipedalWalkerHardcore-v3,BipedalWalker-Med-Stairs-v0,BipedalWalker-Med-PitGap-v0,BipedalWalker-Med-StumpHeight-v0,BipedalWalker-Med-Roughness-v0,BipedalWalker-Max-v0 --log_dir=/path/to/curate/experiments/bipedalwalker-full/curate-tsrt200-ocs0p25solved-keeptarget-pmsosdir-cpu/seeds/bipedalwalker-full-nostop-curate-tsrt200-ocs0p25solved-keeptarget-pmsosdir --test_interval=100 --test_num_episodes=10 --test_num_processes=2 --early_stopping=False --deterministic_test_evaluation=False --test_checkpoint=True --test_solved_checkpoint=True --test_solved_return_threshold=300.0 --test_aggregation=True --log_plr_buffer_stats=True --log_replay_complexity=True --log_action_complexity=False --verbose --no_cuda=True --assert_no_prior_xpid=True
+```
 
-## Environments
+# Citation
 
-### 🧭 MiniGrid Mazes
+If you find CURATE useful or related to your research, please consider citing our work. Thank you. 
 
-![Example mazes](/docs/images/ood_mazes.png)
+```
+@article{lee2026curate,
+  title={CURATE: Automatic Curriculum Learning for Reinforcement Learning Agents through Competence-Based Curriculum Policy Search in Structured Task Spaces},
+  author={Lee, Tabitha Edith and Ke, Nan Rosemary and Patil, Sarvesh and Dahmani, Annya and Yiu, Eunice and Saleh, Esra'a and Gopnik, Alison and Kroemer, Oliver and Berseth, Glen},
+  journal={Transactions on Machine Learning Research (TMLR)},
+  month={August},
+  year={2026},
+  organization={TMLR},
+  url={https://openreview.net/forum?id=DlnvWfoIgv},
+}
+```
 
-The [MiniGrid-based mazes](https://github.com/facebookresearch/dcd/tree/master/envs/multigrid) from [Dennis et al, 2020](https://arxiv.org/abs/2012.02096) and [Jiang et al, 2021](https://arxiv.org/abs/2110.02439) require agents to perform partially-observable navigation. Various human-designed singleton and procedurally-generated mazes allow testing of zero-shot transfer performance to out-of-distribution configurations.
+# Acknowledgments
 
-#### Experiments from [Jiang et al, 2021](https://arxiv.org/abs/2110.02439)
-| Method        | json config  |
-| ------------- |:-------------|
-| PLR<sup>⊥</sup> | `minigrid/25_blocks/mg_25b_robust_plr.json`| 
-| PLR| `minigrid/25_blocks/mg_25b_plr.json` |
-| REPAIRED| `minigrid/25_blocks/mg_25b_repaired.json`|
-| Minimax | `minigrid/25_blocks/mg_25b_minimax.json`|
-| DR | `minigrid/25_blocks/mg_25b_dr.json`|
-
-#### Experiments from [Parker-Holder et al, 2022](https://accelagent.github.io/)
-| Method        | json config  |
-| ------------- |:-------------|
-| ACCEL (from empty) | `minigrid/60_blocks_uniform/mg_60b_uni_accel_empty.json`| 
-| PLR<sup>⊥</sup> (Uniform(0-60) blocks) | `minigrid/mg_60b_uni_robust_plr.json` |
-| DR (Uniform(0-60) blocks) | `minigrid/mg_60b_uni_dr.json`|
-
-#### Experiments from [Mediratta et al, 2023](https://arxiv.org/abs/2308.10797)
-| Method        | json config  |
-| ------------- |:-------------|
-| PAIRED+HiEnt (25 blocks) | `minigrid/25_blocks/mg_25b_paired_hient.json`| 
-| PAIRED+HiEnt (Uniform(0-60) blocks) | `minigrid/60_blocks_uniform/mg_60b_uni_paired_hient.json`| 
-| PAIRED+BC+HiEnt (25 blocks) | `minigrid/25_blocks/mg_25b_paired_bc_hient.json`| 
-| PAIRED+BC+HiEnt (Uniform(0-60) blocks) | `minigrid/60_blocks_uniform/mg_60b_uni_paired_bc_hient.json`|
-| PAIRED+Evo+BC+HiEnt (Uniform(0-60) blocks) | `minigrid/60_blocks_uniform/mg_60b_uni_paired_evo_bc_hient.json`|  
-
-> NOTE: To disable `HiEnt` (for e.g. in BC experiments), set `entropy_coef = 0.0` and `adv_entropy_coef = 0.0`
-
-> NOTE: In BC experiments, set `use_kl_only_agent = True` for `UniBC` and `use_kl_only_agent = False` for `BiBC`
-
-### 🏎 CarRacing
-
-#### `CarRacingBezier`
-
-![CarRacingBezier tracks](/docs/images/car_racing_bezier_tracks.png)
-
-The [`CarRacingBezier`](https://github.com/facebookresearch/dcd/tree/master/envs/box2d) environment introduced in [Jiang et al, 2021](https://arxiv.org/abs/2110.02439) reparameterizes the tracks in the original `CarRacing` environment from OpenAI Gym using Bézier curves. By default, `CarRacingBezier` generates tracks by randomizing 12 control points defining a Bézier curve.
-
-#### `CarRacingF1`
-![CarRacingF1 tracks](/docs/images/f1_benchmark_tracks.png)
-The [`CarRacingF1`](https://github.com/facebookresearch/dcd/tree/master/envs/box2d/racetracks) benchmark introduced in [Jiang et al, 2021](https://arxiv.org/abs/2110.02439) consists of 20 challenging tracks based on the official Formula-1 tracks. This benchmark allows evaluation of zero-shot transfer performance to longer tracks with more difficult turns.
-| Method        | json config  |
-| ------------- |:-------------|
-| PLR<sup>⊥</sup> | `car_racing/cr_robust_plr.json`| 
-| PLR| `car_racing/cr_plr.json` |
-| REPAIRED| `car_racing/cr_repaired.json`|
-| PAIRED | `car_racing/cr_paired.json`|
-| DR | `car_racing/cr_dr.json`|
-
-#### Experiments from [Mediratta et al, 2023](https://arxiv.org/abs/2308.10797)
-| Method        | json config  |
-| ------------- |:-------------|
-| PAIRED+HiEnt | `car_racing/cr_paired_hient.json`| 
-| PAIRED+BC+HiEnt | `car_racing/cr_paired_bc_hient.json`| 
-
-> NOTE: To disable `HiEnt` (for e.g. in BC experiments), set `entropy_coef = 0.0` and `adv_entropy_coef = 0.0`
-
-> NOTE: In BC experiments, set `use_kl_only_agent = True` for `UniBC` and `use_kl_only_agent = False` for `BiBC`
-
-### 🦿🦿 BipedalWalker
-
-![Example BipedalWalker environments](/docs/images/bipedal_challenges.png)
-
-The [BipedalWalker environment](https://github.com/facebookresearch/dcd/tree/master/envs/bipedalwalker) requires continuous control of a 2D bipedal robot over challenging terrain with various obstacles, using a propriocetive observation. The zero-shot transfer configurations, used in [Parker-Holder et al, 2022](https://accelagent.github.io/), include `BipedalWalkerHardcore`, environments featuring each challenge (i.e. ground roughness, stump, pit gap, and stairs) in isolation, as well as extremely challenging configurations discovered by POET in [Wang et al, 2019](https://arxiv.org/abs/1901.01753).
-
-| Method        | json config  |
-| ------------- |:-------------|
-| ACCEL | `bipedal/bipedal_accel.json`| 
-| ACCEL (in POET design space) | `bipedal/bipedal_accel_poet.json`| 
-| PLR<sup>⊥</sup> | `bipedal/bipedal_robust_plr.json` | 
-| PAIRED | `bipedal/bipedal_paired.json`|
-| Minimax | `bipedal/bipedal_minimax.json`|
-| DR | `bipedal/bipedal_dr.json`|
-| PAIRED+Evo+BC+HiEnt | `bipedal/bipedal_paired_evo_bc_hient.json`|
-
-![Example ACCEL BipedalWalker agent on challenging terrain](/docs/images/accel_bipedal_demo.gif)
-
-
-### Current environment support
-| Method        | 🧭 MiniGrid mazes | 🏎 CarRacing | 🦿🦿 BipedalWalker |
-| ------------- |:-------------|:-------------|:-------------|
-| ACCEL | ✅ | ❌ | ✅ |
-| PLR<sup>⊥</sup> |✅ |✅ |✅ | 
-| PLR  |✅ |✅ |✅ | 
-| REPAIRED  |✅ |✅ |✅ | 
-| PAIRED  |✅ |✅ |✅ | 
-| Minimax  |✅ |✅ |✅ | 
-| DR  |✅ |✅ |✅ | 
-| PAIRED+BC  |✅ |✅ |✅ | 
-| PAIRED+Evo  |✅ |❌ |✅ | 
-
-
-## 🏗 Integrating a new environment
-
-### Adding your environment
-
-1. Create a module for your new environment in [`envs`](https://github.com/facebookresearch/dcd/tree/master/envs).
-2. Create an adversarial version of your environment. An easy approach is to define `<YourEnv>Adversarial` inside a file called `adversarial.py`.
-3. Support the required functions inside `<YourEnv>Adversarial` for the UED algorithms of interest:
-
-### Supporting domain randomization (DR)
-- `reset_agent()`: Reset the current environment level, i.e. only the student agent's state. Do not change the actual environment configuration. Returns the first observation in a new episode starting in that level.
-- `reset_random()`: Reset the environment to a random level, and return the observation for the first time step in this level.
-
-### Supporting PAIRED
-Your adversarial environment must support methods for allowing an adversarial teacher policy to incrementally design a level of the environment step-by-step.
-- `reset_agent()`
-- `reset()`: Reset the environment to an initial state. For example, for a maze environment, this initial state is an empty grid.
-- `step_adversary(action)`: Transition the environment when the teacher performs <action>. Returns a Gym-style transition tuple to the teacher's policy, (`obs`, `reward`, `done`, `info_dict`), where `reward` is always 0, and `done=True` when environment design is completed. The `obs` is an observation dictionary or tensor that the teacher policy receives as input at the next step.
-
-You must also define the adversary observation space and action space inside the `__init__.py` method of `<YourEnv>Adversarial`:
-- `adversary_observation_space`: Gym space for the adversary's observation space.
-- `adversary_action_space`: Gym space for the adversary's action space.
-
-### Supporting PLR and PLR<sup>⊥</sup>
-By default, the `domain_randomization` generator used by PLR will try to generate each new level using a uniformly random teacher policy, requiring the implementation of `step_adversary` as in PAIRED/REPAIRED. However, only `reset_random` is needed if the additional flag `--use_reset_random_dr=True` is passed to `train.py`.
-- `reset_agent()`
-- `reset()`
-- Either `reset_random()` or `step_adversary(action)`
-- `reset_to_level(level)`: This method receives a level encoding `<level>` and resets the environment to the corresponding level, and returns the observation for the first time step in this level. 
-
-### Supporting REPAIRED
-To support REPAIRED, implement the methods needed to support PAIRED and PLR.
-
-### Supporting ACCEL
-- `reset_agent()`
-- `reset()`
-- Either `reset_random()` or `step_adversary(action)`
-- `mutate_level(num_edits)`: This method applies <num_edits> random edits to the current level to produce a mutation of it, resets the environment to this mutated level, and returns the observation for the first time step in this level.
-
-### Example implementations
-See the adversarial maze environment, [`envs/multigrid/adversarial.py`](https://github.com/facebookresearch/dcd/tree/master/envs/multigrid), for a straightforward example of how these methods and attributes can be implemented.
-
-### Adding policy models
-4. Create a new file in [`models`](https://github.com/facebookresearch/dcd/tree/master/models) called `<your_environment>_models.py` containing student and teacher policy models for your environment. See [`models/multigrid_models.py`]([https://github.com/facebookresearch/dcd/tree/master/envs/](https://github.com/facebookresearch/dcd/blob/main/models/multigrid_models.py)) for an example implementation.
-
-### Connecting your environment to the training loop
-5. In `util/__init__.py`, update `_make_env` to properly initialize a non-vectorized version of your adversarial environment (e.g. apply any non-vectorized wrappers).
-6. In `util/__init__.py`, update `create_parallel_env` to properly initialize a vectorized version of your adversarial environment (e.g. apply any vectorized wrappers).
-7. In `util/__init__.py`, update `is_dense_reward_env` to return `True` if your environment returns non-zero rewards before the terminal step.
-8. In `util/make_agent.py`, create a new function called `make_model_for_<your_environment>_agent`, following the pattern in the equivalent function for the existing environments, and integrate the call to this function inside the function `make_agent`.
-9. In `envs/runners/adversarial_runner.py`, update `use_byte_encoding` to return `True` if the level data structures input into `reset_to_level(level)` for your environment are  Numpy arrays, which will then be turned into byte strings when stored in the PLR level replay buffer.
-10. In `envs/runners/adversarial_runner.py`, add support for your environment in `_get_active_levels` by appropriately returning the proper level data structure for your environment's levels. This should be the same data structure that your environment's `reset_to_level(level)` expects as input.
-11. You will likely need to define a custom attribute wrapper inside `ParallelAdversarialVecEnv` to return a list of specific per-environment attributes. See the method `get_num_blocks` for an example. In the future, we plan to simplify this implementation by returning all reported level metrics in a single method call. 
-12. In `envs/runners/adversarial_runner.py`, update `_get_env_stats` to return a dictionary of mean level metrics and stats across the current batch of vectorized environments. A simple way to do this is to define a function `_get_env_stats_<your_environment>` that returns this dictionary
-    
-### Connecting your environment to the evaluation logic
-In order to perform zero-shot transfer evaluation of agents trained in your adversarial environment, you should create customized, out-of-distribution versions your environment, typically done by subclassing the environment (same base class as used by `<YourEnv>Adversarial`).    
-
-13. In `eval.py`, update `_make_env` in the `Evaluator` class to properly initialize a non-vectorized version of your environment (typically subclass of your environment for zero-shot transfer).
-14. In `eval.py`, update `wrap_venv` in the `Evaluator` class to properly initialize a vectorized version of the environment created in (12).
-15. If your environment integration runs well and could be of interest to many researchers, consider making a pull request to integrate the environment into this repo.
+We thank [M. Jiang and M. Dennis et al. (NeurIPS 2021)](https://proceedings.neurips.cc/paper/2021/hash/0e915db6326b6fb6a3c56546980a8c93-Abstract.html) for open-sourcing the DCD repository, which we extended in the CURATE work.
+For more information about this repository, please refer to the [original DCD repository](https://github.com/facebookresearch/dcd).
