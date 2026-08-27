@@ -10,6 +10,7 @@ from .adversarial_fruitbot_inv import *
 from .adversarial_heist import *
 from .adversarial_jumper import *
 from .adversarial_leaper import *
+from .adversarial_maze import *
 from .adversarial_procgen import *
 from .bigfish import *
 from .bossfight import *
@@ -23,4 +24,5 @@ from .fruitbot_inv import *
 from .heist import *
 from .jumper import *
 from .leaper import *
+from .maze import *
 from .procgen import *
