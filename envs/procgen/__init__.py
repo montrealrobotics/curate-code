@@ -15,6 +15,8 @@ from .adversarial_miner import *
 from .adversarial_ninja import *
 from .adversarial_plunder import *
 from .adversarial_procgen import *
+from .adversarial_starpilot import *
+from .adversarial_starpilot_inv import *
 from .bigfish import *
 from .bossfight import *
 from .caveflyer import *
@@ -32,3 +34,5 @@ from .miner import *
 from .ninja import *
 from .plunder import *
 from .procgen import *
+from .starpilot import *
+from .starpilot_inv import *
