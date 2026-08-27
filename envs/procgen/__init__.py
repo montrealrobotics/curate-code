@@ -8,6 +8,7 @@ from .adversarial_dodgeball import *
 from .adversarial_fruitbot import *
 from .adversarial_fruitbot_inv import *
 from .adversarial_heist import *
+from .adversarial_jumper import *
 from .adversarial_procgen import *
 from .bigfish import *
 from .bossfight import *
@@ -19,4 +20,5 @@ from .dodgeball import *
 from .fruitbot import *
 from .fruitbot_inv import *
 from .heist import *
+from .jumper import *
 from .procgen import *
