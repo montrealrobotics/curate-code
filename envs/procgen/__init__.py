@@ -4,6 +4,7 @@ from .adversarial_caveflyer import *
 from .adversarial_chaser import *
 from .adversarial_climber import *
 from .adversarial_coinrun import *
+from .adversarial_dodgeball import *
 from .adversarial_procgen import *
 from .bigfish import *
 from .bossfight import *
@@ -11,4 +12,5 @@ from .caveflyer import *
 from .chaser import *
 from .climber import *
 from .coinrun import *
+from .dodgeball import *
 from .procgen import *
