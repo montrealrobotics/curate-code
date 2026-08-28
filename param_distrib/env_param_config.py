@@ -22,14 +22,6 @@ def env_param_config_from_name(env_name):
         max_params = [30]
         num_param_steps = [30]
         param_names = ["Mean fish quota"]
-    elif env_name == "bossfight_easy_2d":
-        min_params = [1, 1]
-        max_params = [9, 5]
-        num_param_steps = [9, 5]
-        param_names = [
-            "Mean round health",
-            "Mean num. rounds",
-        ]
     elif env_name == "bossfight_easier_3d":
         min_params = [1, 1, 2]
         max_params = [2, 2, 3]
@@ -70,20 +62,6 @@ def env_param_config_from_name(env_name):
         num_param_steps = [4]
         param_names = [
             "Mean num. objects per chunk",
-        ]
-    elif env_name == "chaser_easy_1d":
-        min_params = [0]
-        max_params = [3]
-        num_param_steps = [4]
-        param_names = [
-            "Mean num. enemies",
-        ]
-    elif env_name == "chaser_hard_1d":
-        min_params = [0]
-        max_params = [3]
-        num_param_steps = [4]
-        param_names = [
-            "Mean num. enemies",
         ]
     elif env_name == "chaser_easier_2d":
         min_params = [0, 1]
