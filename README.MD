@@ -1,6 +1,6 @@
 # CURATE
 
-This is the official implementation of [CURATE (accepted to TMLR 2026)](https://montrealrobotics.ca/curate/), an automatic curriculum learning algorithm for reinforcement learning agents.
+This is the official implementation of [CURATE (TMLR 2026)](https://montrealrobotics.ca/curate/), an automatic curriculum learning algorithm for reinforcement learning agents.
 This implementation also features an example integration with the [Procgen Curriculum Suite](https://github.com/montrealrobotics/procgen-curriculum), which was also introduced in the CURATE work.
 
 # Installation
@@ -56,7 +56,7 @@ If you find CURATE useful or related to your research, please consider citing ou
 @article{lee2026curate,
   title={CURATE: Automatic Curriculum Learning for Reinforcement Learning Agents through Competence-Based Curriculum Policy Search in Structured Task Spaces},
   author={Lee, Tabitha Edith and Ke, Nan Rosemary and Patil, Sarvesh and Dahmani, Annya and Yiu, Eunice and Saleh, Esra'a and Gopnik, Alison and Kroemer, Oliver and Berseth, Glen},
-  journal={Accepted to Transactions on Machine Learning Research (TMLR)},
+  journal={Transactions on Machine Learning Research (TMLR)},
   month={August},
   year={2026},
   organization={TMLR},
